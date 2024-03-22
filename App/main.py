@@ -19,15 +19,19 @@ from rich.console import Console
 from rich.table import Table
 import csv
 
-# Explicitly specify the path to your .env file
-dotenv_path = './.env'
+# Load environment variables
+dotenv_path = '.env'
 load_dotenv(dotenv_path=dotenv_path)
 
-# API configuration and usage threshold
+# API configuration
 API_KEY = os.getenv('API_KEY')
 ORG_ID = os.getenv('ORG_ID')
 BASE_URL = os.getenv('BASE_URL')
-USAGE_THRESHOLD_KB = int(os.getenv('USAGE_THRESHOLD_KB', 300000))  # Default to 300000 KB if not specified
+USAGE_THRESHOLD_KB = int(os.getenv('USAGE_THRESHOLD_KB', '300000'))  # Default to 300000 KB if not specified
+
+# Parse EXCLUDED_VLAN, default to None if unset or not a digit
+EXCLUDED_VLAN = os.getenv('EXCLUDED_VLAN')
+EXCLUDED_VLAN = int(EXCLUDED_VLAN) if EXCLUDED_VLAN is not None and EXCLUDED_VLAN.isdigit() else None
 
 headers = {
     'X-Cisco-Meraki-API-Key': API_KEY,
@@ -52,19 +56,34 @@ def get_port_statuses(serial):
         console.print(f"Failed to fetch port statuses for device {serial} with timespan of 30 days.", style="bold red")
         return []
 
+def get_port_vlan(serial):
+    url = f'{BASE_URL}/devices/{serial}/switch/ports'
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        vlan_mapping = {port['portId']: port.get('vlan', 'N/A') for port in response.json()}
+        return vlan_mapping
+    else:
+        console.print(f"Failed to fetch VLAN information for device {serial}.", style="bold red")
+        return {}
+
 def display_switches_with_ports(switches):
     for switch in switches:
         ports = get_port_statuses(switch['serial'])
+        vlan_mapping = get_port_vlan(switch['serial'])  # Fetch VLAN mapping
         table = Table(title=f"Switch: {switch['name']} (Serial: {switch['serial']})", show_header=True, header_style="bold magenta")
         table.add_column("Network ID", style="dim")
         table.add_column("Switch Name")
         table.add_column("Port ID")
         table.add_column("Status")
+        table.add_column("VLAN")  # Added VLAN column
         table.add_column("Total Usage (KB)", justify="right")
         table.add_column("Sent (KB)", justify="right")
         table.add_column("Received (KB)", justify="right")
         
         for port in ports:
+            vlan = vlan_mapping.get(port['portId'], 'N/A')  # Use VLAN mapping
+            if EXCLUDED_VLAN is not None and vlan == EXCLUDED_VLAN:  # Check for VLAN exclusion
+                continue
             usage = port.get('usageInKb', {'total': 'N/A', 'sent': 'N/A', 'recv': 'N/A'})
             total_usage = str(usage.get('total', 'N/A'))
             sent_usage = str(usage.get('sent', 'N/A'))
@@ -77,6 +96,7 @@ def display_switches_with_ports(switches):
                 switch.get('name', 'N/A'),
                 port.get('portId', 'N/A'), 
                 f"[{status_style}]{status}[/]",
+                str(vlan),  # Add VLAN to row
                 total_usage,
                 sent_usage,
                 received_usage
@@ -86,20 +106,25 @@ def display_switches_with_ports(switches):
 def filter_and_export_low_usage_ports_to_csv(switches, usage_threshold_kb, output_csv_file):
     with open(output_csv_file, mode='w', newline='') as file:
         writer = csv.writer(file)
-        writer.writerow(["Network ID", "Switch Name", "Port ID", "Status", "Total Usage (KB)", "Sent (KB)", "Received (KB)"])
+        writer.writerow(["Network ID", "Switch Name", "Port ID", "Status", "VLAN", "Total Usage (KB)", "Sent (KB)", "Received (KB)"])
         
         for switch in switches:
             ports = get_port_statuses(switch['serial'])
+            vlan_mapping = get_port_vlan(switch['serial'])  # Fetch VLAN mapping
             for port in ports:
+                vlan = vlan_mapping.get(port['portId'], 'N/A')  # Use VLAN mapping
+                if EXCLUDED_VLAN is not None and vlan == EXCLUDED_VLAN:  # Check for VLAN exclusion
+                    continue
                 usage = port.get('usageInKb', {'total': 0, 'sent': 0, 'recv': 0})
                 total_usage = usage.get('total', 0)
-                
+
                 if total_usage < usage_threshold_kb:
                     writer.writerow([
                         switch.get('networkId', 'N/A'), 
                         switch.get('name', 'N/A'),
                         port.get('portId', 'N/A'), 
                         port.get('status', 'N/A'),
+                        str(vlan),  # Add VLAN to row
                         str(total_usage),
                         str(usage.get('sent', 'N/A')),
                         str(usage.get('recv', 'N/A'))
@@ -116,3 +141,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+           
+

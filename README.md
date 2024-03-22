@@ -17,6 +17,7 @@ The script creates reports in CSV format, showcasing low switch port usage for M
 - Displays switch and port information in a formatted table in the console.
 - Filters out ports with total data usage below a specified threshold.
 - Exports the filtered list of low usage ports to a CSV file.
+- Exports the filtered list of low usage ports to a CSV file.
 
 ## Prerequisites
 
@@ -58,9 +59,10 @@ API_KEY=your_meraki_api_key
 ORG_ID=your_organization_id
 BASE_URL=https://api.meraki.com/api/v1
 USAGE_THRESHOLD_KB=your-usage-threshold
+EXCLUDED_VLAN=vlan-to-exclude
 ```
 
-Replace `your_meraki_api_key` , `your_organization_id` and `your-usage-threshold` with your actual Meraki API key, organization ID, and usage threshold.
+Replace `your_meraki_api_key` , `your_organization_id` , `your-usage-threshold` and `vlan-to-exclude` with your actual Meraki API key, organization ID, and usage threshold.
 
 ## Usage
 
