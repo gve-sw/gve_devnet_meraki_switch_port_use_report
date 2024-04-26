@@ -17,7 +17,7 @@ The script creates reports in CSV format, showcasing low switch port usage for M
 - Displays switch and port information in a formatted table in the console.
 - Filters out ports with total data usage below a specified threshold.
 - Exports the filtered list of low usage ports to a CSV file.
-- Exports the filtered list of low usage ports to a CSV file.
+- Excludes devices in a certain vlan if the field is input.
 
 ## Prerequisites
 
